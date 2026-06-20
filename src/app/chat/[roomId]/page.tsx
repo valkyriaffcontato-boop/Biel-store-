@@ -11,7 +11,7 @@ export default async function ChatRoomPage({ params }: { params: Promise<{ roomI
 
   const resolvedParams = await params;
   const room = await prisma.chatRoom.findUnique({
-    where: { id: resolvedParams.id },
+    where: { id: resolvedParams.roomId }, // <-- CORREGIDO: usar .roomId aqui!
     include: {
       buyer: true,
       seller: true,
