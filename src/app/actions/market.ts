@@ -104,4 +104,4 @@ export async function approveSeller(requestId: string) {
   const request = await prisma.sellerRequest.update({ where: { id: requestId }, data: { status: "APPROVED" } });
   await prisma.user.update({ where: { id: request.userId }, data: { role: "SELLER" } });
   revalidatePath("/dashboard/admin");
-                               }
+                                             }
