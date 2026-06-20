@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { buyProduct, createQuestion, answerQuestion } from "@/app/actions/market";
 import { getSession } from "@/lib/session";
-import { ShieldCheck, ArrowLeft, Gamepad, HelpCircle, BadgeCheck, MessageSquare } from "lucide-react";
+import { ShieldCheck, ArrowLeft, Gamepad, HelpCircle, BadgeCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -17,6 +17,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   });
 
   if (!product) notFound();
+
+  // Segurança: Se o anúncio não estiver ativo, apenas o dono ou um ADMIN podem visualizar a página
+  const isOwner = session?.userId === product.sellerId;
+  const isAdmin = session?.role === "ADMIN";
+  if (product.status !== "active" && !isOwner && !isAdmin) {
+    notFound();
+  }
 
   async function handlePurchase() {
     "use server";
@@ -72,7 +79,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               </div>
 
               <form action={handlePurchase}>
-                <button className="w-full bg-[#00e676] hover:bg-emerald-400 text-black font-black py-4 rounded-2xl text-xs transition duration-200 shadow-xl shadow-[#00e676]/10">
+                <button className="w-full bg-[#00e676] hover:bg-emerald-400 text-black font-black py-4 rounded-2xl text-xs transition duration-200 shadow-xl">
                   Comprar agora (Entrega garantida)
                 </button>
               </form>
@@ -85,41 +92,26 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
 
-        {/* SEÇÃO PERGUNTAS E RESPOSTAS (IGUAL GG MAX) */}
+        {/* PERGUNTAS */}
         <div className="bg-neutral-900/30 border border-neutral-800 rounded-3xl p-6 space-y-6">
           <h2 className="text-sm font-black text-neutral-200 flex items-center gap-2">
             <HelpCircle className="w-4 h-4 text-emerald-400" /> Perguntas ao vendedor
           </h2>
 
-          {/* Enviar Pergunta */}
           <form action={handleAsk} className="flex gap-2">
-            <input 
-              name="questionText" 
-              placeholder="Faça uma pergunta sobre o estoque, nível da conta, etc..." 
-              className="flex-1 bg-neutral-950 p-3 rounded-xl border border-neutral-850 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none" 
-              required 
-            />
-            <button className="bg-neutral-800 hover:bg-neutral-700 font-bold text-xs px-4 rounded-xl transition">
-              Perguntar
-            </button>
+            <input name="questionText" placeholder="Faça uma pergunta sobre o anúncio..." className="flex-1 bg-neutral-950 p-3 rounded-xl border border-neutral-850 text-xs text-white" required />
+            <button className="bg-neutral-800 hover:bg-neutral-700 font-bold text-xs px-4 rounded-xl transition">Perguntar</button>
           </form>
 
-          {/* Lista de Perguntas */}
           <div className="space-y-4 pt-2">
             {product.questions.length === 0 ? (
-              <p className="text-xs text-neutral-500 text-center py-4">Nenhuma pergunta feita até o momento. Seja o primeiro!</p>
+              <p className="text-xs text-neutral-500 text-center py-4">Nenhuma pergunta feita até o momento.</p>
             ) : (
               product.questions.map((q) => (
                 <div key={q.id} className="bg-neutral-950 p-4 rounded-2xl border border-neutral-850 space-y-2 text-xs">
-                  <div className="flex justify-between text-neutral-500 text-[10px]">
-                    <span>@{q.user.name} perguntou:</span>
-                    <span>Hoje</span>
-                  </div>
                   <p className="font-semibold text-neutral-200">{q.text}</p>
-                  
-                  {/* Resposta do Vendedor */}
                   {q.answer ? (
-                    <div className="bg-neutral-900/60 p-3 rounded-xl border border-neutral-800/80 mt-2 space-y-1">
+                    <div className="bg-neutral-900/60 p-3 rounded-xl border border-neutral-800 mt-2">
                       <p className="text-[10px] text-emerald-400 font-bold uppercase">Resposta do Vendedor:</p>
                       <p className="text-neutral-300">{q.answer}</p>
                     </div>
@@ -130,8 +122,8 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                         const answer = formData.get("answerText") as string;
                         await answerQuestion(q.id, answer, product.id);
                       }} className="flex gap-2 mt-2">
-                        <input name="answerText" placeholder="Responder esta pergunta..." className="flex-1 bg-neutral-900 p-2 rounded-lg border border-neutral-800 text-[11px]" required />
-                        <button className="bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold px-3 rounded-lg">Responder</button>
+                        <input name="answerText" placeholder="Responder..." className="flex-1 bg-neutral-900 p-2 rounded-lg border border-neutral-850 text-[11px] text-white" required />
+                        <button className="bg-[#00e676] text-black text-[10px] font-bold px-3 rounded-lg">Responder</button>
                       </form>
                     )
                   )}
