@@ -36,19 +36,9 @@ export async function buyProduct(productId: string) {
   if (!session) throw new Error("Faça login para realizar a compra.");
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) throw new Error("Produto não encontrado.");
-
   await prisma.order.create({ data: { productId: product.id, buyerId: session.userId, sellerId: product.sellerId, amount: product.price, status: "PAID" } });
-  
-  let chatRoom = await prisma.chatRoom.findUnique({
-    where: { buyerId_sellerId: { buyerId: session.userId, sellerId: product.sellerId } }
-  });
-
-  if (!chatRoom) {
-    chatRoom = await prisma.chatRoom.create({
-      data: { buyerId: session.userId, sellerId: product.sellerId }
-    });
-  }
-
+  let chatRoom = await prisma.chatRoom.findUnique({ where: { buyerId_sellerId: { buyerId: session.userId, sellerId: product.sellerId } } });
+  if (!chatRoom) chatRoom = await prisma.chatRoom.create({ data: { buyerId: session.userId, sellerId: product.sellerId } });
   revalidatePath("/");
   revalidatePath("/chat");
   redirect(`/chat/${chatRoom.id}`);
@@ -149,4 +139,11 @@ export async function resolveSupportTicket(ticketId: string) {
   if (!session || session.role !== "ADMIN") throw new Error("Não autorizado");
   await (prisma as any).supportTicket.update({ where: { id: ticketId }, data: { status: "RESOLVED" } });
   revalidatePath("/dashboard/admin");
-                                             }
+}
+
+export async function markAsDelivered(orderId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Não autorizado");
+  await prisma.order.update({ where: { id: orderId }, data: { deliveredBySeller: true, status: "DELIVERED" } });
+  revalidatePath("/chat");
+}
