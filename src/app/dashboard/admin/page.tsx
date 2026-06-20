@@ -22,8 +22,8 @@ export default async function AdminDashboardPage() {
     include: { user: true }
   });
   
-  // Buscar chamados abertos de ajuda enviados pelos clientes
-  const tickets = await prisma.supportTicket.findMany({
+  // Buscar chamados abertos (Usando o desvio de tipo 'as any' para contornar o cache de compilação)
+  const tickets = await (prisma as any).supportTicket.findMany({
     where: { status: "OPEN" },
     orderBy: { createdAt: "desc" }
   });
@@ -90,7 +90,7 @@ export default async function AdminDashboardPage() {
             <p className="text-xs text-neutral-500">Nenhum chamado de ajuda pendente.</p>
           ) : (
             <div className="divide-y divide-neutral-800/40">
-              {tickets.map((t) => (
+              {tickets.map((t: any) => (
                 <div key={t.id} className="py-4 space-y-2 text-xs">
                   <div className="flex justify-between items-center">
                     <p className="font-bold text-neutral-200">{t.name} ({t.email})</p>
