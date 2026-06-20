@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { buyProduct, createQuestion, answerQuestion } from "@/app/actions/market";
 import { getSession } from "@/lib/session";
 import { ShieldCheck, ArrowLeft, Gamepad, HelpCircle, BadgeCheck } from "lucide-react";
 import Link from "next/link";
@@ -18,24 +17,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   if (!product) notFound();
 
-  // Segurança: Se o anúncio não estiver ativo, apenas o dono ou um ADMIN podem visualizar a página
   const isOwner = session?.userId === product.sellerId;
   const isAdmin = session?.role === "ADMIN";
-  if (product.status !== "active" && !isOwner && !isAdmin) {
-    notFound();
-  }
-
-  async function handlePurchase() {
-    "use server";
-    if (!product) return;
-    await buyProduct(product.id);
-  }
-
-  async function handleAsk(formData: FormData) {
-    "use server";
-    const text = formData.get("questionText") as string;
-    if (product) await createQuestion(product.id, text);
-  }
+  if (product.status !== "active" && !isOwner && !isAdmin) notFound();
 
   return (
     <div className="min-h-screen bg-[#080a10] text-white py-12 px-4">
@@ -78,11 +62,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 </div>
               </div>
 
-              <form action={handlePurchase}>
-                <button className="w-full bg-[#00e676] hover:bg-emerald-400 text-black font-black py-4 rounded-2xl text-xs transition duration-200 shadow-xl">
-                  Comprar agora (Entrega garantida)
-                </button>
-              </form>
+              {/* BOTAO COMPRAR LEVA PARA A TELA DE CHECKOUT/PAGAMENTO */}
+              <Link href={`/checkout/${product.id}`} className="w-full block text-center bg-[#00e676] hover:bg-emerald-400 text-black font-black py-4 rounded-2xl text-xs transition duration-200 shadow-xl shadow-[#00e676]/10">
+                Comprar agora (Entrega garantida)
+              </Link>
 
               <div className="flex items-start gap-2 text-[10px] text-neutral-400 bg-neutral-900/40 p-3 rounded-xl border border-neutral-850">
                 <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -91,48 +74,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             </div>
           </div>
         </div>
-
-        {/* PERGUNTAS */}
-        <div className="bg-neutral-900/30 border border-neutral-800 rounded-3xl p-6 space-y-6">
-          <h2 className="text-sm font-black text-neutral-200 flex items-center gap-2">
-            <HelpCircle className="w-4 h-4 text-emerald-400" /> Perguntas ao vendedor
-          </h2>
-
-          <form action={handleAsk} className="flex gap-2">
-            <input name="questionText" placeholder="Faça uma pergunta sobre o anúncio..." className="flex-1 bg-neutral-950 p-3 rounded-xl border border-neutral-850 text-xs text-white" required />
-            <button className="bg-neutral-800 hover:bg-neutral-700 font-bold text-xs px-4 rounded-xl transition">Perguntar</button>
-          </form>
-
-          <div className="space-y-4 pt-2">
-            {product.questions.length === 0 ? (
-              <p className="text-xs text-neutral-500 text-center py-4">Nenhuma pergunta feita até o momento.</p>
-            ) : (
-              product.questions.map((q) => (
-                <div key={q.id} className="bg-neutral-950 p-4 rounded-2xl border border-neutral-850 space-y-2 text-xs">
-                  <p className="font-semibold text-neutral-200">{q.text}</p>
-                  {q.answer ? (
-                    <div className="bg-neutral-900/60 p-3 rounded-xl border border-neutral-800 mt-2">
-                      <p className="text-[10px] text-emerald-400 font-bold uppercase">Resposta do Vendedor:</p>
-                      <p className="text-neutral-300">{q.answer}</p>
-                    </div>
-                  ) : (
-                    session?.userId === product.sellerId && (
-                      <form action={async (formData) => {
-                        "use server";
-                        const answer = formData.get("answerText") as string;
-                        await answerQuestion(q.id, answer, product.id);
-                      }} className="flex gap-2 mt-2">
-                        <input name="answerText" placeholder="Responder..." className="flex-1 bg-neutral-900 p-2 rounded-lg border border-neutral-850 text-[11px] text-white" required />
-                        <button className="bg-[#00e676] text-black text-[10px] font-bold px-3 rounded-lg">Responder</button>
-                      </form>
-                    )
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
       </div>
     </div>
   );
