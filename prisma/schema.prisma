@@ -1,0 +1,82 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  SELLER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  DELIVERED
+  COMPLETED
+  IN_DISPUTE
+  REFUNDED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role      @default(USER)
+  isVerified    Boolean   @default(false)
+  balance       Float     @default(0.0)
+  frozenBalance Float     @default(0.0)
+  createdAt     DateTime  @default(now())
+
+  products      Product[]
+  ordersAsBuyer Order[]   @relation("BuyerOrders")
+  ordersAsSeller Order[]  @relation("SellerOrders")
+  requests      SellerRequest[]
+}
+
+model SellerRequest {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName   String
+  cpf        String
+  whatsapp   String
+  games      String
+  experience String
+  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt  DateTime @default(now())
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  sellerId    String
+  seller      User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  price       Float
+  category    String   // ex: Free Fire, Roblox, Valorant
+  isBoosted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  orders      Order[]
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  productId         String
+  product           Product     @relation(fields: [productId], references: [id])
+  buyerId           String
+  buyer             User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  sellerId          String
+  seller            User        @relation("SellerOrders", fields: [sellerId], references: [id])
+  amount            Float
+  status            OrderStatus @default(PENDING_PAYMENT)
+  deliveredBySeller Boolean     @default(false)
+  acceptedByBuyer   Boolean     @default(false)
+  payoutReadyAt     DateTime?
+  createdAt         DateTime    @default(now())
+}
