@@ -42,12 +42,18 @@ export async function buyProduct(productId: string) {
   revalidatePath("/chat");
 }
 
-export async function moderateProduct(productId: string, action: "active" | "rejected") {
+export async function createQuestion(productId: string, text: string) {
   const session = await getSession();
-  if (!session || session.role !== "ADMIN") throw new Error("Não autorizado");
-  await prisma.product.update({ where: { id: productId }, data: { status: action } });
-  revalidatePath("/");
-  revalidatePath("/dashboard/admin");
+  if (!session) throw new Error("Faça login para perguntar.");
+  await prisma.question.create({ data: { productId, userId: session.userId, text } });
+  revalidatePath(`/products/${productId}`);
+}
+
+export async function answerQuestion(questionId: string, answer: string, productId: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Não autorizado");
+  await prisma.question.update({ where: { id: questionId }, data: { answer } });
+  revalidatePath(`/products/${productId}`);
 }
 
 export async function deleteProduct(productId: string) {
@@ -104,4 +110,4 @@ export async function approveSeller(requestId: string) {
   const request = await prisma.sellerRequest.update({ where: { id: requestId }, data: { status: "APPROVED" } });
   await prisma.user.update({ where: { id: request.userId }, data: { role: "SELLER" } });
   revalidatePath("/dashboard/admin");
-                                             }
+}
