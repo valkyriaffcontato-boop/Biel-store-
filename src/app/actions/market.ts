@@ -56,6 +56,14 @@ export async function answerQuestion(questionId: string, answer: string, product
   revalidatePath(`/products/${productId}`);
 }
 
+export async function moderateProduct(productId: string, action: "active" | "rejected") {
+  const session = await getSession();
+  if (!session || session.role !== "ADMIN") throw new Error("Não autorizado");
+  await prisma.product.update({ where: { id: productId }, data: { status: action } });
+  revalidatePath("/");
+  revalidatePath("/dashboard/admin");
+}
+
 export async function deleteProduct(productId: string) {
   const session = await getSession();
   if (!session) throw new Error("Não autorizado");
