@@ -40,7 +40,7 @@ model User {
   requests      SellerRequest[]
   chatsAsBuyer  ChatRoom[] @relation("BuyerChats")
   chatsAsSeller ChatRoom[] @relation("SellerChats")
-  messages      Message[]
+  messages      Message[]  @relation("Sender") // <-- Correção aqui!
 }
 
 model SellerRequest {
