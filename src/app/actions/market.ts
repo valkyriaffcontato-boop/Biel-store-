@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 export async function authenticateMock(email: string, name: string, actionType: "login" | "register") {
   let user = await prisma.user.findUnique({ where: { email } });
@@ -27,6 +28,7 @@ export async function createProductWithImage(title: string, description: string,
   if (!session) throw new Error("Não autorizado");
   await prisma.product.create({ data: { title, description, price, category, image: base64Image, sellerId: session.userId } });
   revalidatePath("/");
+  redirect("/dashboard/profile");
 }
 
 export async function buyProduct(productId: string) {
@@ -34,12 +36,22 @@ export async function buyProduct(productId: string) {
   if (!session) throw new Error("Faça login para realizar a compra.");
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) throw new Error("Produto não encontrado.");
+
   await prisma.order.create({ data: { productId: product.id, buyerId: session.userId, sellerId: product.sellerId, amount: product.price, status: "PAID" } });
-  try {
-    await prisma.chatRoom.create({ data: { buyerId: session.userId, sellerId: product.sellerId } });
-  } catch (err) {}
+  
+  let chatRoom = await prisma.chatRoom.findUnique({
+    where: { buyerId_sellerId: { buyerId: session.userId, sellerId: product.sellerId } }
+  });
+
+  if (!chatRoom) {
+    chatRoom = await prisma.chatRoom.create({
+      data: { buyerId: session.userId, sellerId: product.sellerId }
+    });
+  }
+
   revalidatePath("/");
   revalidatePath("/chat");
+  redirect(`/chat/${chatRoom.id}`); // Redireciona na hora para o chat do pedido!
 }
 
 export async function createQuestion(productId: string, text: string) {
@@ -67,8 +79,9 @@ export async function moderateProduct(productId: string, action: "active" | "rej
 export async function deleteProduct(productId: string) {
   const session = await getSession();
   if (!session) throw new Error("Não autorizado");
-  await prisma.product.delete({ where: { id: productId } });
-  revalidatePath("/dashboard/seller/listings");
+  // Exclusão lógica segura (Soft Delete) para não quebrar chaves de pedidos passados
+  await prisma.product.update({ where: { id: productId }, data: { status: "deleted" } });
+  revalidatePath("/dashboard/profile");
 }
 
 export async function toggleProductStatus(productId: string, currentStatus: string) {
@@ -76,14 +89,14 @@ export async function toggleProductStatus(productId: string, currentStatus: stri
   if (!session) throw new Error("Não autorizado");
   const nextStatus = currentStatus === "active" ? "hidden" : "active";
   await prisma.product.update({ where: { id: productId }, data: { status: nextStatus } });
-  revalidatePath("/dashboard/seller/listings");
+  revalidatePath("/dashboard/profile");
 }
 
 export async function boostProduct(productId: string) {
   const session = await getSession();
   if (!session) throw new Error("Não autorizado");
   await prisma.product.update({ where: { id: productId }, data: { isBoosted: true } });
-  revalidatePath("/dashboard/seller/listings");
+  revalidatePath("/dashboard/profile");
 }
 
 export async function confirmReceived(orderId: string) {
@@ -118,4 +131,4 @@ export async function approveSeller(requestId: string) {
   const request = await prisma.sellerRequest.update({ where: { id: requestId }, data: { status: "APPROVED" } });
   await prisma.user.update({ where: { id: request.userId }, data: { role: "SELLER" } });
   revalidatePath("/dashboard/admin");
-}
+    }
