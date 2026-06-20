@@ -40,7 +40,8 @@ model User {
   requests      SellerRequest[]
   chatsAsBuyer  ChatRoom[] @relation("BuyerChats")
   chatsAsSeller ChatRoom[] @relation("SellerChats")
-  messages      Message[]  @relation("Sender") // <-- Correção aqui!
+  messages      Message[]  @relation("Sender")
+  questions     Question[]
 }
 
 model SellerRequest {
@@ -66,9 +67,21 @@ model Product {
   category    String
   image       String?  @db.Text
   isBoosted   Boolean  @default(false)
-  status      String   @default("active")
+  status      String   @default("active") // active, hidden, rejected
   createdAt   DateTime @default(now())
   orders      Order[]
+  questions   Question[]
+}
+
+model Question {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String   @db.Text
+  answer    String?  @db.Text
+  createdAt DateTime @default(now())
 }
 
 model Order {
