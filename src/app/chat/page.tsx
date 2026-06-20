@@ -1,67 +1,145 @@
-import { getSession } from "@/lib/session";
-import { prisma } from "@/lib/prisma";
-import { MessageSquare, ArrowLeft, User } from "lucide-react";
-import Link from "next/link";
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-export default async function ChatListPage() {
-  const session = await getSession();
+generator client {
+  provider = "prisma-client-js"
+}
 
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-[#08080c] flex items-center justify-center">
-        <p className="text-xs text-neutral-500">Faça login para acessar o chat.</p>
-      </div>
-    );
-  }
+enum Role {
+  USER
+  SELLER
+  ADMIN
+}
 
-  // Busca salas de negociação associadas a esse usuário logado
-  const rooms = await prisma.chatRoom.findMany({
-    where: {
-      OR: [{ buyerId: session.userId }, { sellerId: session.userId }]
-    },
-    include: {
-      buyer: true,
-      seller: true,
-    }
-  });
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  DELIVERED
+  COMPLETED
+  IN_DISPUTE
+  REFUNDED
+}
 
-  return (
-    <div className="min-h-screen bg-[#08080c] text-white py-12 px-4">
-      <div className="max-w-xl mx-auto bg-neutral-900/40 border border-neutral-800 rounded-3xl p-6 space-y-6">
-        <div className="flex justify-between items-center">
-          <h2 className="text-sm font-bold flex items-center gap-1.5 text-neutral-300">
-            <MessageSquare className="w-5 h-5 text-emerald-400" /> Seus Chats de Negociação
-          </h2>
-          <Link href="/" className="text-xs text-neutral-400 hover:text-white flex items-center gap-1">
-            <ArrowLeft className="w-3.5 h-3.5" /> Voltar
-          </Link>
-        </div>
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role      @default(USER)
+  isVerified    Boolean   @default(false)
+  balance       Float     @default(0.0)
+  frozenBalance Float     @default(0.0)
+  image         String?   @db.Text
+  createdAt     DateTime  @default(now())
 
-        {rooms.length === 0 ? (
-          <p className="text-xs text-neutral-500 text-center py-10">Nenhuma entrega ou conversa ativa no momento.</p>
-        ) : (
-          <div className="space-y-3">
-            {rooms.map((room) => {
-              const otherUser = room.buyerId === session.userId ? room.seller : room.buyer;
-              return (
-                <Link href={`/chat/${room.id}`} key={room.id} className="flex items-center justify-between bg-neutral-950 p-4 rounded-2xl border border-neutral-850 hover:border-neutral-750 transition cursor-pointer">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400">
-                      <User className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-extrabold text-xs text-neutral-100">@{otherUser.name}</p>
-                      <p className="text-[9px] text-neutral-500">Tocar para abrir chat seguro</p>
-                    </div>
-                  </div>
-                  <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest bg-emerald-500/10 px-2.5 py-1 rounded-md">Ativo</span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
+  products      Product[]
+  ordersAsBuyer Order[]   @relation("BuyerOrders")
+  ordersAsSeller Order[]  @relation("SellerOrders")
+  requests      SellerRequest[]
+  chatsAsBuyer  ChatRoom[] @relation("BuyerChats")
+  chatsAsSeller ChatRoom[] @relation("SellerChats")
+  messages      Message[]  @relation("Sender")
+  questions     Question[]
+  reviews       Review[]
+}
 
-      </div>
-    </div>
-  );
-    }
+model SellerRequest {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName   String
+  cpf        String
+  whatsapp   String
+  games      String
+  experience String
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  sellerId    String
+  seller      User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  price       Float
+  category    String
+  image       String?  @db.Text
+  isBoosted   Boolean  @default(false)
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  orders      Order[]
+  questions   Question[]
+}
+
+model Question {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String   @db.Text
+  answer    String?  @db.Text
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  productId         String
+  product           Product     @relation(fields: [productId], references: [id])
+  buyerId           String
+  buyer             User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  sellerId          String
+  seller            User        @relation("SellerOrders", fields: [sellerId], references: [id])
+  amount            Float
+  status            OrderStatus @default(PENDING_PAYMENT)
+  deliveredBySeller Boolean     @default(false)
+  acceptedByBuyer   Boolean     @default(false)
+  payoutReadyAt     DateTime?
+  createdAt         DateTime    @default(now())
+  review            Review?
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  message   String   @db.Text
+  status    String   @default("OPEN") // OPEN, RESOLVED
+  createdAt DateTime @default(now())
+}
+
+model ChatRoom {
+  id         String    @id @default(uuid())
+  buyerId    String
+  buyer      User      @relation("BuyerChats", fields: [buyerId], references: [id])
+  sellerId   String
+  seller     User      @relation("SellerChats", fields: [sellerId], references: [id])
+  createdAt  DateTime  @default(now())
+  messages   Message[]
+
+  @@unique([buyerId, sellerId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  roomId     String
+  room       ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  senderId   String
+  sender     User     @relation("Sender", fields: [senderId], references: [id])
+  text       String   @db.Text
+  createdAt  DateTime @default(now())
+}
