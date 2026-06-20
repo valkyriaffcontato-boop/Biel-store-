@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { buyProduct } from "@/app/actions/market";
-import { ShieldCheck, Calendar, ArrowLeft, Gamepad } from "lucide-react";
+import { ShieldCheck, ArrowLeft, Gamepad } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -15,6 +15,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   async function handlePurchase() {
     "use server";
+    if (!product) return; // Correção de segurança para o TypeScript
     await buyProduct(product.id);
   }
 
