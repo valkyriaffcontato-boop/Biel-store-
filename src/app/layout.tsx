@@ -1,10 +1,29 @@
 import "./globals.css";
 import { getSession, destroySession } from "@/lib/session";
-import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import Navbar from "@/components/Navbar";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
+  let userDetails = null;
 
+  // Se o usuário estiver logado, buscamos os dados mais atualizados do banco
+  if (session) {
+    const userFromDb = await prisma.user.findUnique({
+      where: { id: session.userId }
+    });
+    if (userFromDb) {
+      userDetails = {
+        id: userFromDb.id,
+        name: userFromDb.name,
+        email: userFromDb.email,
+        role: userFromDb.role,
+        isVerified: userFromDb.isVerified,
+      };
+    }
+  }
+
+  // Ação de Logout do servidor chamada pela Navbar do cliente
   async function handleLogout() {
     "use server";
     await destroySession();
@@ -12,31 +31,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="pt-BR">
-      <body className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between">
-        <header className="border-b border-neutral-800 bg-neutral-900/50 backdrop-blur-md sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <Link href="/" className="text-xl font-extrabold tracking-wider text-purple-500">
-              BIEL STORE
-            </Link>
-            
-            <nav className="flex items-center gap-4 text-sm">
-              {session ? (
-                <>
-                  <span className="text-neutral-400">Olá, <strong className="text-white">{session.name}</strong> ({session.role})</span>
-                  <form action={handleLogout}>
-                    <button className="bg-neutral-800 hover:bg-neutral-700 px-3 py-1.5 rounded transition">Sair</button>
-                  </form>
-                </>
-              ) : (
-                <span className="text-xs text-neutral-400">Use os formulários abaixo para testar o sistema</span>
-              )}
-            </nav>
-          </div>
-        </header>
+      <body className="min-h-screen bg-[#08080c] text-white flex flex-col justify-between">
+        <div className="flex-1 flex flex-col">
+          {/* A nova barra superior e menu lateral unificados */}
+          <Navbar user={userDetails} onLogout={handleLogout} />
+          
+          <main className="flex-1">{children}</main>
+        </div>
 
-        <main className="flex-1">{children}</main>
-
-        <footer className="border-t border-neutral-900 py-6 text-center text-xs text-neutral-500 bg-black">
+        <footer className="border-t border-neutral-900 py-6 text-center text-[10px] text-neutral-500 bg-black/40">
           &copy; 2026 BIEL STORE. Administradores: calvoeditofc@gmail.com | mafiosodashopping@gmail.com
         </footer>
       </body>
