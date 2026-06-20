@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { Send, User, ShieldAlert, ArrowLeft, Star } from "lucide-react";
+import { Send, User, ShieldAlert, ArrowLeft } from "lucide-react";
 import { sendMessage, markAsDelivered, confirmReceived, submitReview } from "@/app/actions/market";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -21,12 +21,16 @@ export default async function ChatRoomPage({ params }: { params: Promise<{ roomI
 
   if (!room) notFound();
 
-  // Buscar último pedido associado
+  // 1. Busca o último pedido de forma simples (sem include para não travar o compilador)
   const order = await prisma.order.findFirst({
     where: { productId: { in: await prisma.product.findMany({ where: { sellerId: room.sellerId } }).then(p => p.map(x => x.id)) } },
-    include: { review: true },
     orderBy: { createdAt: "desc" }
   });
+
+  // 2. Busca a avaliação correspondente de forma separada usando o bypass de tipo
+  const review = order 
+    ? await (prisma as any).review.findUnique({ where: { orderId: order.id } }) 
+    : null;
 
   async function handleSend(formData: FormData) {
     "use server";
@@ -87,8 +91,8 @@ export default async function ChatRoomPage({ params }: { params: Promise<{ roomI
               )}
             </div>
 
-            {/* SEÇÃO DE AVALIAÇÃO DO VENDEDOR (APÓS COMPLETO) */}
-            {isBuyer && order.status === "COMPLETED" && !order.review && (
+            {/* SEÇÃO DE AVALIAÇÃO DO VENDEDOR (UTILIZA O VALOR DA BUSCA SEPARADA) */}
+            {isBuyer && order.status === "COMPLETED" && !review && (
               <div className="bg-neutral-950 p-4 rounded-2xl border border-neutral-850 space-y-3">
                 <p className="text-xs font-bold text-[#00e676]">Deixe uma Avaliação para o Vendedor</p>
                 <form action={handleReview} className="space-y-3">
@@ -146,4 +150,4 @@ export default async function ChatRoomPage({ params }: { params: Promise<{ roomI
       </div>
     </div>
   );
-              }
+}
