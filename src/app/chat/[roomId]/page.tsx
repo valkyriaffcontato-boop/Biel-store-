@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { Send, User, ShieldAlert, ArrowLeft } from "lucide-react";
-import { sendMessage } from "@/app/actions/market";
+import { Send, User, ShieldAlert, ArrowLeft, Star } from "lucide-react";
+import { sendMessage, markAsDelivered, confirmReceived, submitReview } from "@/app/actions/market";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,7 +11,7 @@ export default async function ChatRoomPage({ params }: { params: Promise<{ roomI
 
   const resolvedParams = await params;
   const room = await prisma.chatRoom.findUnique({
-    where: { id: resolvedParams.roomId }, // <-- CORREGIDO: usar .roomId aqui!
+    where: { id: resolvedParams.roomId },
     include: {
       buyer: true,
       seller: true,
@@ -21,13 +21,39 @@ export default async function ChatRoomPage({ params }: { params: Promise<{ roomI
 
   if (!room) notFound();
 
+  // Buscar último pedido associado
+  const order = await prisma.order.findFirst({
+    where: { productId: { in: await prisma.product.findMany({ where: { sellerId: room.sellerId } }).then(p => p.map(x => x.id)) } },
+    include: { review: true },
+    orderBy: { createdAt: "desc" }
+  });
+
   async function handleSend(formData: FormData) {
     "use server";
     const text = formData.get("messageText") as string;
     if (room) await sendMessage(room.id, text);
   }
 
-  const otherUser = room.buyerId === session.userId ? room.seller : room.buyer;
+  async function handleDelivered() {
+    "use server";
+    if (order) await markAsDelivered(order.id);
+  }
+
+  async function handleAccept() {
+    "use server";
+    if (order) await confirmReceived(order.id);
+  }
+
+  async function handleReview(formData: FormData) {
+    "use server";
+    const rating = parseInt(formData.get("rating") as string);
+    const comment = formData.get("comment") as string;
+    if (order) await submitReview(order.id, rating, comment);
+  }
+
+  const isSeller = session.userId === room.sellerId;
+  const isBuyer = session.userId === room.buyerId;
+  const otherUser = isBuyer ? room.seller : room.buyer;
 
   return (
     <div className="min-h-screen bg-[#080a10] text-white py-12 px-4">
@@ -36,8 +62,54 @@ export default async function ChatRoomPage({ params }: { params: Promise<{ roomI
           <ArrowLeft className="w-3.5 h-3.5" /> Voltar para conversas
         </Link>
 
-        <div className="bg-neutral-900/30 border border-neutral-800 rounded-3xl overflow-hidden flex flex-col h-[550px] shadow-2xl">
-          {/* TOPO DO CHAT */}
+        {/* CONTROLES DE ENTREGA E AVALIAÇÃO DA COMPRA */}
+        {order && (
+          <div className="bg-neutral-900/40 border border-neutral-800 p-5 rounded-3xl space-y-4">
+            <p className="text-xs font-bold text-neutral-300">Status da Transação: <span className="text-[#00e676]">{order.status}</span></p>
+            
+            <div className="flex flex-wrap gap-2">
+              {/* VENDEDOR CONFIRMA A ENTREGA */}
+              {isSeller && !order.deliveredBySeller && (
+                <form action={handleDelivered}>
+                  <button className="bg-[#00e676] hover:bg-emerald-400 text-black font-extrabold text-xs px-4 py-2 rounded-xl transition">
+                    Confirmar Envio / Marcar como Entregue
+                  </button>
+                </form>
+              )}
+
+              {/* COMPRADOR CONFIRMA O RECEBIMENTO */}
+              {isBuyer && order.status === "DELIVERED" && (
+                <form action={handleAccept}>
+                  <button className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-4 py-2 rounded-xl transition">
+                    Confirmar Recebimento (Tudo ok!)
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* SEÇÃO DE AVALIAÇÃO DO VENDEDOR (APÓS COMPLETO) */}
+            {isBuyer && order.status === "COMPLETED" && !order.review && (
+              <div className="bg-neutral-950 p-4 rounded-2xl border border-neutral-850 space-y-3">
+                <p className="text-xs font-bold text-[#00e676]">Deixe uma Avaliação para o Vendedor</p>
+                <form action={handleReview} className="space-y-3">
+                  <div className="flex gap-2">
+                    <select name="rating" className="bg-neutral-900 text-xs p-2 rounded-lg border border-neutral-800 text-yellow-500 font-bold">
+                      <option value="5">⭐⭐⭐⭐★ (5 Estrelas)</option>
+                      <option value="4">⭐⭐⭐⭐ (4 Estrelas)</option>
+                      <option value="3">⭐⭐⭐ (3 Estrelas)</option>
+                      <option value="2">⭐⭐ (2 Estrelas)</option>
+                      <option value="1">⭐ (1 Estrela)</option>
+                    </select>
+                  </div>
+                  <input name="comment" placeholder="Como foi o atendimento do vendedor?" className="w-full bg-neutral-900 p-2.5 rounded-lg border border-neutral-800 text-xs text-white" required />
+                  <button className="bg-[#00e676] text-black font-extrabold text-[10px] px-3 py-1.5 rounded-lg">Enviar Avaliação</button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="bg-neutral-900/30 border border-neutral-800 rounded-3xl overflow-hidden flex flex-col h-[500px] shadow-2xl">
           <div className="bg-neutral-950 p-4 border-b border-neutral-850 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400">
@@ -48,24 +120,15 @@ export default async function ChatRoomPage({ params }: { params: Promise<{ roomI
                 <p className="text-[9px] text-neutral-500">Chat seguro de entrega</p>
               </div>
             </div>
-            <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full font-bold">
-              Negociação Ativa
-            </span>
           </div>
 
-          {/* ÁREA DE MENSAGENS */}
+          {/* MENSAGENS */}
           <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-neutral-950/20">
-            <div className="bg-neutral-900/30 border border-neutral-800 p-3.5 rounded-xl text-[10px] text-neutral-400 flex items-start gap-2 leading-relaxed">
-              <ShieldAlert className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Dica de Segurança: Envie todos os dados de acesso do jogo por este chat. Ele serve como registro oficial para fins de auditoria do suporte se necessário.</span>
-            </div>
-
             {room.messages.map((msg) => {
               const isMe = msg.senderId === session.userId;
               return (
                 <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[70%] p-3.5 rounded-2xl text-xs space-y-1 ${isMe ? "bg-[#00e676] text-black font-semibold rounded-br-none" : "bg-neutral-900 text-neutral-100 rounded-bl-none border border-neutral-800"}`}>
-                    <p className="text-[9px] opacity-60">@{msg.sender.name}</p>
+                  <div className={`max-w-[75%] p-3 rounded-2xl text-xs ${isMe ? "bg-[#00e676] text-black font-semibold rounded-br-none" : "bg-neutral-900 text-neutral-100 rounded-bl-none border border-neutral-800"}`}>
                     <p>{msg.text}</p>
                   </div>
                 </div>
@@ -75,19 +138,12 @@ export default async function ChatRoomPage({ params }: { params: Promise<{ roomI
 
           {/* INPUT DO CHAT */}
           <form action={handleSend} className="bg-neutral-950 p-4 border-t border-neutral-850 flex gap-2">
-            <input 
-              name="messageText" 
-              placeholder="Digite sua mensagem de entrega..." 
-              className="flex-1 bg-neutral-900 p-3 rounded-xl border border-neutral-800 text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none" 
-              required 
-            />
-            <button className="bg-[#00e676] hover:bg-emerald-400 text-black font-extrabold px-5 rounded-xl transition flex items-center justify-center">
-              <Send className="w-4 h-4" />
-            </button>
+            <input name="messageText" placeholder="Digite sua mensagem de entrega..." className="flex-1 bg-neutral-900 p-3 rounded-xl border border-neutral-800 text-xs text-white" required />
+            <button className="bg-[#00e676] text-black font-extrabold px-5 rounded-xl transition"><Send className="w-4 h-4" /></button>
           </form>
-
         </div>
+
       </div>
     </div>
   );
-}
+              }
